@@ -265,53 +265,119 @@ export function TVLMonitor() {
 
       addResult("💼 Fetching obligation data for each strategy...");
 
-      for (let i = 0; i < strategyCapInfos.length; i++) {
-        const capInfo = strategyCapInfos[i];
+      // Process in smaller batches with delays to avoid rate limiting
+      const obligationBatchSize = 5; // Smaller batches
+      for (let i = 0; i < strategyCapInfos.length; i += obligationBatchSize) {
+        const batch = strategyCapInfos.slice(i, i + obligationBatchSize);
         addResult(
-          `  📊 Processing ${i + 1}/${strategyCapInfos.length}: ${capInfo.obligationId.slice(0, 8)}...`,
+          `  📦 Processing batch ${Math.floor(i / obligationBatchSize) + 1}/${Math.ceil(strategyCapInfos.length / obligationBatchSize)} (${batch.length} obligations)`,
         );
 
-        try {
-          const obligation = await suilendClient.getObligation(
-            capInfo.obligationId,
-          );
+        // Process batch in parallel with retry logic
+        const batchPromises = batch.map(async (capInfo, batchIndex) => {
+          const globalIndex = i + batchIndex;
 
-          // Extract USD values (these are already in Decimal format from Suilend SDK)
-          const depositedUSD =
-            Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
-          const borrowedUSD =
-            Number(obligation.unweightedBorrowedValueUsd?.value || 0) /
-            10 ** 18;
-          const netValueUSD = depositedUSD - borrowedUSD;
+          // Retry logic
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              addResult(
+                `    📊 Processing ${globalIndex + 1}/${strategyCapInfos.length}: ${capInfo.obligationId.slice(0, 8)}... (attempt ${attempt})`,
+              );
 
-          obligations.push({
-            obligationId: capInfo.obligationId,
-            deposited_value_usd: depositedUSD,
-            unweighted_borrowed_value_usd: borrowedUSD,
-            net_value_usd: netValueUSD,
-            strategyType: capInfo.strategyType,
-            owner: capInfo.owner,
-            objectId: capInfo.objectId,
-          });
+              const obligation = await suilendClient.getObligation(
+                capInfo.obligationId,
+              );
 
-          totalDeposits += depositedUSD;
-          totalBorrows += borrowedUSD;
-          totalTVL += depositedUSD; // TVL is typically total deposits
+              // Extract USD values
+              const depositedUSD =
+                Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
+              const borrowedUSD =
+                Number(obligation.unweightedBorrowedValueUsd?.value || 0) /
+                10 ** 18;
+              const netValueUSD = depositedUSD - borrowedUSD;
 
+              const obligationData = {
+                obligationId: capInfo.obligationId,
+                deposited_value_usd: depositedUSD,
+                unweighted_borrowed_value_usd: borrowedUSD,
+                net_value_usd: netValueUSD,
+                strategyType: capInfo.strategyType,
+                owner: capInfo.owner,
+                objectId: capInfo.objectId,
+              };
+
+              addResult(
+                `      ✅ Success: Deposits: $${depositedUSD.toFixed(2)} | Borrows: $${borrowedUSD.toFixed(2)}`,
+              );
+
+              return obligationData;
+            } catch (error) {
+              addResult(
+                `      ⚠️ Attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`,
+              );
+
+              if (attempt === 3) {
+                addResult(`      ❌ Final failure after 3 attempts`);
+                return null;
+              }
+
+              // Wait before retry (exponential backoff)
+              await new Promise((resolve) =>
+                setTimeout(resolve, attempt * 1000),
+              );
+            }
+          }
+          return null;
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+
+        // Add successful results
+        for (const result of batchResults) {
+          if (result) {
+            obligations.push(result);
+            totalDeposits += result.deposited_value_usd;
+            totalBorrows += result.unweighted_borrowed_value_usd;
+            totalTVL += result.deposited_value_usd;
+          }
+        }
+
+        // Add delay between batches to avoid overwhelming the RPC
+        if (i + obligationBatchSize < strategyCapInfos.length) {
           addResult(
-            `    💰 Deposits: $${depositedUSD.toFixed(2)} | Borrows: $${borrowedUSD.toFixed(2)}`,
+            `    ⏳ Waiting 2s before next batch to avoid rate limiting...`,
           );
-        } catch (error) {
-          addResult(`    ❌ Failed to get obligation data: ${error}`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       }
 
-      // Step 5: Compile results
+      // Step 5: Compile results and add success/failure summary
+      const successfulObligations = obligations.length;
+      const totalAttempted = strategyCapInfos.length;
+      const failedObligations = totalAttempted - successfulObligations;
+      const successRate =
+        totalAttempted > 0
+          ? ((successfulObligations / totalAttempted) * 100).toFixed(1)
+          : "0";
+
+      addResult(`📈 === PROCESSING SUMMARY ===`);
+      addResult(
+        `   ✅ Successful: ${successfulObligations}/${totalAttempted} (${successRate}%)`,
+      );
+      if (failedObligations > 0) {
+        addResult(
+          `   ❌ Failed: ${failedObligations} obligations (network/rate limiting issues)`,
+        );
+        addResult(
+          `   💡 Tip: Failed obligations may succeed on retry due to temporary network issues`,
+        );
+      }
+
       const tvlSummary: TVLSummary = {
         totalTVL,
         totalDeposits,
         totalBorrows,
-        strategyCount: strategyCapInfos.length,
+        strategyCount: successfulObligations, // Use successful count
         obligations: obligations.sort(
           (a, b) => b.deposited_value_usd - a.deposited_value_usd,
         ), // Sort by deposits descending
@@ -320,16 +386,16 @@ export function TVLMonitor() {
       setTvlData(tvlSummary);
       setLastUpdated(new Date());
 
-      addResult("✅ TVL calculation completed!");
-      addResult(`📊 SUMMARY:`);
-      addResult(`   Total TVL (Deposits): ${formatUSD(totalTVL * 10 ** 18)}`);
+      addResult("🎉 TVL CALCULATION COMPLETE! 🎉");
+      addResult(`📊 === FINAL SUMMARY ===`);
+      addResult(`   Total TVL: ${formatUSD(totalTVL * 10 ** 18)}`);
       addResult(`   Total Deposits: ${formatUSD(totalDeposits * 10 ** 18)}`);
       addResult(`   Total Borrows: ${formatUSD(totalBorrows * 10 ** 18)}`);
       addResult(
         `   Net Value: ${formatUSD((totalDeposits - totalBorrows) * 10 ** 18)}`,
       );
-      addResult(`   Strategy Count: ${strategyCapInfos.length}`);
-      addResult(`   Processed Obligations: ${obligations.length}`);
+      addResult(`   Active Strategies: ${successfulObligations}`);
+      addResult(`   Data Quality: ${successRate}% success rate`);
     } catch (error: any) {
       addResult(`❌ Error calculating TVL: ${error.message}`);
     } finally {
