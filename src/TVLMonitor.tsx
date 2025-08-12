@@ -337,239 +337,216 @@ export function TVLMonitor() {
     }
   };
 
-  // Function to get all WrappedObligationCap objects as well
-  const calculateWrappedCapTVL = async () => {
-    setLoading(true);
-    addResult(
-      "🌶️ Searching for WrappedObligationCap objects (Hot Potato pattern)...",
-    );
+  // return (
+  //   <Container>
+  //     <Flex direction="column" gap="4">
+  //       <Heading>📊 Strategy Wrapper TVL Monitor</Heading>
+  //       <Text size="2" color="blue">
+  //         Monitor Total Value Locked across all Strategy Wrapper obligations
+  //       </Text>
 
-    try {
-      // Use events to find WrappedObligationCap objects
-      addResult("🔍 Searching for ConvertedToWrappedCap events...");
+  //       <Card>
+  //       pageCountWrapped++;
 
-      // Fetch all wrapped cap events with pagination
-      const allWrappedEvents = [];
-      let hasNextPageWrapped = true;
-      let nextCursorWrapped = null;
-      let pageCountWrapped = 0;
+  //       addResult(
+  //         `📄 Fetched wrapped page ${pageCountWrapped}: ${wrappedEvents.data.length} events (total: ${allWrappedEvents.length})`,
+  //       );
 
-      while (hasNextPageWrapped && pageCountWrapped < 20) {
-        // Safety limit
-        const wrappedEvents = await suiClient.queryEvents({
-          query: {
-            MoveEventType: `${CONTRACTS.STRATEGY_WRAPPER_PACKAGE}::strategy_wrapper::ConvertedToWrappedCap`,
-          },
-          limit: 250, // Larger batch size
-          order: "descending",
-          cursor: nextCursorWrapped,
-        });
+  //       if (!hasNextPageWrapped) {
+  //         break;
+  //       }
+  //     }
 
-        allWrappedEvents.push(...wrappedEvents.data);
+  //     addResult(
+  //       `📅 Found ${allWrappedEvents.length} total ConvertedToWrappedCap events across ${pageCountWrapped} pages`,
+  //     );
 
-        hasNextPageWrapped = wrappedEvents.hasNextPage || false;
-        nextCursorWrapped = wrappedEvents.nextCursor || null;
-        pageCountWrapped++;
+  //     // Extract wrapped cap IDs from events
+  //     const wrappedCapIds: string[] = [];
+  //     for (const event of allWrappedEvents) {
+  //       if (event.parsedJson && typeof event.parsedJson === "object") {
+  //         const eventData = event.parsedJson as any;
+  //         if (eventData.wrapped_cap_id) {
+  //           // Address might already have 0x prefix, normalize it
+  //           const address = eventData.wrapped_cap_id.startsWith("0x")
+  //             ? eventData.wrapped_cap_id
+  //             : `0x${eventData.wrapped_cap_id}`;
+  //           wrappedCapIds.push(address);
+  //         }
+  //       }
+  //     }
 
-        addResult(
-          `📄 Fetched wrapped page ${pageCountWrapped}: ${wrappedEvents.data.length} events (total: ${allWrappedEvents.length})`,
-        );
+  //     // Get the actual wrapped cap objects
+  //     const wrappedCaps = { data: [] as any[] };
+  //     let wrappedNotFoundCount = 0;
 
-        if (!hasNextPageWrapped) {
-          break;
-        }
-      }
+  //     addResult(`🔄 Checking ${wrappedCapIds.length} wrapped cap objects...`);
 
-      addResult(
-        `📅 Found ${allWrappedEvents.length} total ConvertedToWrappedCap events across ${pageCountWrapped} pages`,
-      );
+  //     // Process in batches to avoid overwhelming the RPC
+  //     const batchSize = 50;
+  //     for (let i = 0; i < wrappedCapIds.length; i += batchSize) {
+  //       const batch = wrappedCapIds.slice(i, i + batchSize);
+  //       addResult(
+  //         `  🌶️ Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(wrappedCapIds.length / batchSize)} (${batch.length} objects)`,
+  //       );
 
-      // Extract wrapped cap IDs from events
-      const wrappedCapIds: string[] = [];
-      for (const event of allWrappedEvents) {
-        if (event.parsedJson && typeof event.parsedJson === "object") {
-          const eventData = event.parsedJson as any;
-          if (eventData.wrapped_cap_id) {
-            // Address might already have 0x prefix, normalize it
-            const address = eventData.wrapped_cap_id.startsWith("0x")
-              ? eventData.wrapped_cap_id
-              : `0x${eventData.wrapped_cap_id}`;
-            wrappedCapIds.push(address);
-          }
-        }
-      }
+  //       const batchPromises = batch.map(async (capId) => {
+  //         try {
+  //           const obj = await suiClient.getObject({
+  //             id: capId,
+  //             options: { showContent: true, showOwner: true, showType: true },
+  //           });
 
-      // Get the actual wrapped cap objects
-      const wrappedCaps = { data: [] as any[] };
-      let wrappedNotFoundCount = 0;
+  //           if (obj.data && !obj.error) {
+  //             return obj;
+  //           } else {
+  //             return null;
+  //           }
+  //         } catch (error) {
+  //           return null;
+  //         }
+  //       });
 
-      addResult(`🔄 Checking ${wrappedCapIds.length} wrapped cap objects...`);
+  //       const batchResults = await Promise.all(batchPromises);
 
-      // Process in batches to avoid overwhelming the RPC
-      const batchSize = 50;
-      for (let i = 0; i < wrappedCapIds.length; i += batchSize) {
-        const batch = wrappedCapIds.slice(i, i + batchSize);
-        addResult(
-          `  🌶️ Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(wrappedCapIds.length / batchSize)} (${batch.length} objects)`,
-        );
+  //       for (const result of batchResults) {
+  //         if (result) {
+  //           wrappedCaps.data.push(result);
+  //         } else {
+  //           wrappedNotFoundCount++;
+  //         }
+  //       }
+  //     }
 
-        const batchPromises = batch.map(async (capId) => {
-          try {
-            const obj = await suiClient.getObject({
-              id: capId,
-              options: { showContent: true, showOwner: true, showType: true },
-            });
+  //     if (wrappedNotFoundCount > 0) {
+  //       addResult(
+  //         `⚠️ ${wrappedNotFoundCount} wrapped caps no longer exist (possibly converted back to StrategyOwnerCap)`,
+  //       );
+  //     }
 
-            if (obj.data && !obj.error) {
-              return obj;
-            } else {
-              return null;
-            }
-          } catch (error) {
-            return null;
-          }
-        });
+  //     addResult(
+  //       `🌶️ Found ${wrappedCaps.data.length} WrappedObligationCap objects`,
+  //     );
 
-        const batchResults = await Promise.all(batchPromises);
+  //     if (wrappedCaps.data.length === 0) {
+  //       addResult("⚠️ No WrappedObligationCap objects found");
+  //       setLoading(false);
+  //       return;
+  //     }
 
-        for (const result of batchResults) {
-          if (result) {
-            wrappedCaps.data.push(result);
-          } else {
-            wrappedNotFoundCount++;
-          }
-        }
-      }
+  //     // Extract obligation information from wrapped caps
+  //     const wrappedCapInfos: StrategyCapInfo[] = [];
 
-      if (wrappedNotFoundCount > 0) {
-        addResult(
-          `⚠️ ${wrappedNotFoundCount} wrapped caps no longer exist (possibly converted back to StrategyOwnerCap)`,
-        );
-      }
+  //     for (const capObj of wrappedCaps.data) {
+  //       if (capObj.data?.content && "fields" in capObj.data.content) {
+  //         const fields = capObj.data.content.fields as any;
+  //         const innerCap = fields.inner_cap;
 
-      addResult(
-        `🌶️ Found ${wrappedCaps.data.length} WrappedObligationCap objects`,
-      );
+  //         // Check if inner_cap is available (not borrowed)
+  //         if (innerCap && innerCap.fields) {
+  //           wrappedCapInfos.push({
+  //             objectId: capObj.data.objectId!,
+  //             obligationId: innerCap.fields.obligation_id,
+  //             strategyType: Number(fields.strategy_type),
+  //             owner: capObj.data.owner?.AddressOwner || "Unknown",
+  //           });
+  //         } else {
+  //           addResult(
+  //             `⚠️ Wrapped cap ${capObj.data.objectId?.slice(0, 8)}... has borrowed inner_cap (currently in use)`,
+  //           );
+  //         }
+  //       }
+  //     }
 
-      if (wrappedCaps.data.length === 0) {
-        addResult("⚠️ No WrappedObligationCap objects found");
-        setLoading(false);
-        return;
-      }
+  //     addResult(
+  //       `📋 Found ${wrappedCapInfos.length} available wrapped cap obligations`,
+  //     );
 
-      // Extract obligation information from wrapped caps
-      const wrappedCapInfos: StrategyCapInfo[] = [];
+  //     // If we have wrapped caps, add them to the existing calculation
+  //     if (wrappedCapInfos.length > 0) {
+  //       addResult("🔗 Adding wrapped cap obligations to TVL calculation...");
 
-      for (const capObj of wrappedCaps.data) {
-        if (capObj.data?.content && "fields" in capObj.data.content) {
-          const fields = capObj.data.content.fields as any;
-          const innerCap = fields.inner_cap;
+  //       const suilendClient = await SuilendClient.initialize(
+  //         CONTRACTS.LENDING_MARKET_ID,
+  //         TYPES.LENDING_MARKET_TYPE,
+  //         suiClient as any,
+  //       );
 
-          // Check if inner_cap is available (not borrowed)
-          if (innerCap && innerCap.fields) {
-            wrappedCapInfos.push({
-              objectId: capObj.data.objectId!,
-              obligationId: innerCap.fields.obligation_id,
-              strategyType: Number(fields.strategy_type),
-              owner: capObj.data.owner?.AddressOwner || "Unknown",
-            });
-          } else {
-            addResult(
-              `⚠️ Wrapped cap ${capObj.data.objectId?.slice(0, 8)}... has borrowed inner_cap (currently in use)`,
-            );
-          }
-        }
-      }
+  //       const wrappedObligations: ObligationSummary[] = [];
+  //       let wrappedTotalDeposits = 0;
+  //       let wrappedTotalBorrows = 0;
 
-      addResult(
-        `📋 Found ${wrappedCapInfos.length} available wrapped cap obligations`,
-      );
+  //       for (let i = 0; i < wrappedCapInfos.length; i++) {
+  //         const capInfo = wrappedCapInfos[i];
+  //         addResult(
+  //           `  📊 Processing wrapped ${i + 1}/${wrappedCapInfos.length}: ${capInfo.obligationId.slice(0, 8)}...`,
+  //         );
 
-      // If we have wrapped caps, add them to the existing calculation
-      if (wrappedCapInfos.length > 0) {
-        addResult("🔗 Adding wrapped cap obligations to TVL calculation...");
+  //         try {
+  //           const obligation = await suilendClient.getObligation(
+  //             capInfo.obligationId,
+  //           );
 
-        const suilendClient = await SuilendClient.initialize(
-          CONTRACTS.LENDING_MARKET_ID,
-          TYPES.LENDING_MARKET_TYPE,
-          suiClient as any,
-        );
+  //           const depositedUSD =
+  //             Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
+  //           const borrowedUSD =
+  //             Number(obligation.unweightedBorrowedValueUsd?.value || 0) /
+  //             10 ** 18;
 
-        const wrappedObligations: ObligationSummary[] = [];
-        let wrappedTotalDeposits = 0;
-        let wrappedTotalBorrows = 0;
+  //           wrappedObligations.push({
+  //             obligationId: capInfo.obligationId,
+  //             deposited_value_usd: depositedUSD,
+  //             unweighted_borrowed_value_usd: borrowedUSD,
+  //             net_value_usd: depositedUSD - borrowedUSD,
+  //             strategyType: capInfo.strategyType,
+  //             owner: capInfo.owner,
+  //             objectId: capInfo.objectId,
+  //           });
 
-        for (let i = 0; i < wrappedCapInfos.length; i++) {
-          const capInfo = wrappedCapInfos[i];
-          addResult(
-            `  📊 Processing wrapped ${i + 1}/${wrappedCapInfos.length}: ${capInfo.obligationId.slice(0, 8)}...`,
-          );
+  //           wrappedTotalDeposits += depositedUSD;
+  //           wrappedTotalBorrows += borrowedUSD;
 
-          try {
-            const obligation = await suilendClient.getObligation(
-              capInfo.obligationId,
-            );
+  //           addResult(
+  //             `    💰 Deposits: $${depositedUSD.toFixed(2)} | Borrows: $${borrowedUSD.toFixed(2)}`,
+  //           );
+  //         } catch (error) {
+  //           addResult(`    ❌ Failed to get wrapped obligation data: ${error}`);
+  //         }
+  //       }
 
-            const depositedUSD =
-              Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
-            const borrowedUSD =
-              Number(obligation.unweightedBorrowedValueUsd?.value || 0) /
-              10 ** 18;
+  //       addResult(`🌶️ Wrapped Cap Summary:`);
+  //       addResult(
+  //         `   Wrapped TVL: ${formatUSD(wrappedTotalDeposits * 10 ** 18)}`,
+  //       );
+  //       addResult(
+  //         `   Wrapped Borrows: ${formatUSD(wrappedTotalBorrows * 10 ** 18)}`,
+  //       );
+  //       addResult(`   Wrapped Count: ${wrappedCapInfos.length}`);
 
-            wrappedObligations.push({
-              obligationId: capInfo.obligationId,
-              deposited_value_usd: depositedUSD,
-              unweighted_borrowed_value_usd: borrowedUSD,
-              net_value_usd: depositedUSD - borrowedUSD,
-              strategyType: capInfo.strategyType,
-              owner: capInfo.owner,
-              objectId: capInfo.objectId,
-            });
+  //       // Combine with existing TVL data if available
+  //       if (tvlData) {
+  //         const combinedTVL: TVLSummary = {
+  //           totalTVL: tvlData.totalTVL + wrappedTotalDeposits,
+  //           totalDeposits: tvlData.totalDeposits + wrappedTotalDeposits,
+  //           totalBorrows: tvlData.totalBorrows + wrappedTotalBorrows,
+  //           strategyCount: tvlData.strategyCount + wrappedCapInfos.length,
+  //           obligations: [...tvlData.obligations, ...wrappedObligations].sort(
+  //             (a, b) => b.deposited_value_usd - a.deposited_value_usd,
+  //           ),
+  //         };
 
-            wrappedTotalDeposits += depositedUSD;
-            wrappedTotalBorrows += borrowedUSD;
-
-            addResult(
-              `    💰 Deposits: $${depositedUSD.toFixed(2)} | Borrows: $${borrowedUSD.toFixed(2)}`,
-            );
-          } catch (error) {
-            addResult(`    ❌ Failed to get wrapped obligation data: ${error}`);
-          }
-        }
-
-        addResult(`🌶️ Wrapped Cap Summary:`);
-        addResult(
-          `   Wrapped TVL: ${formatUSD(wrappedTotalDeposits * 10 ** 18)}`,
-        );
-        addResult(
-          `   Wrapped Borrows: ${formatUSD(wrappedTotalBorrows * 10 ** 18)}`,
-        );
-        addResult(`   Wrapped Count: ${wrappedCapInfos.length}`);
-
-        // Combine with existing TVL data if available
-        if (tvlData) {
-          const combinedTVL: TVLSummary = {
-            totalTVL: tvlData.totalTVL + wrappedTotalDeposits,
-            totalDeposits: tvlData.totalDeposits + wrappedTotalDeposits,
-            totalBorrows: tvlData.totalBorrows + wrappedTotalBorrows,
-            strategyCount: tvlData.strategyCount + wrappedCapInfos.length,
-            obligations: [...tvlData.obligations, ...wrappedObligations].sort(
-              (a, b) => b.deposited_value_usd - a.deposited_value_usd,
-            ),
-          };
-
-          setTvlData(combinedTVL);
-          addResult(
-            `📊 COMBINED TOTAL TVL: ${formatUSD(combinedTVL.totalTVL * 10 ** 18)}`,
-          );
-        }
-      }
-    } catch (error: any) {
-      addResult(`❌ Error calculating wrapped cap TVL: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  //         setTvlData(combinedTVL);
+  //         addResult(
+  //           `📊 COMBINED TOTAL TVL: ${formatUSD(combinedTVL.totalTVL * 10 ** 18)}`,
+  //         );
+  //       }
+  //     }
+  //   } catch (error: any) {
+  //     addResult(`❌ Error calculating wrapped cap TVL: ${error.message}`);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   return (
     <Container>
