@@ -124,7 +124,9 @@ export function TVLMonitor() {
     // Temporary debug for production - remove after fixing
     const viteEnv = import.meta.env.VITE_SUI_RPC_URL;
     const processEnv = process.env.VITE_SUI_RPC_URL;
-    addResult(`🔧 ENV CHECK: vite=${viteEnv ? "LOADED" : "MISSING"} process=${processEnv ? "LOADED" : "MISSING"}`);
+    addResult(
+      `🔧 ENV CHECK: vite=${viteEnv ? "LOADED" : "MISSING"} process=${processEnv ? "LOADED" : "MISSING"}`,
+    );
 
     try {
       // Step 1: Find all StrategyOwnerCap objects
