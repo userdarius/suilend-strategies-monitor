@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
           NEXT_PUBLIC_SUILEND_USE_BETA_MARKET: JSON.stringify(
             env.NEXT_PUBLIC_SUILEND_USE_BETA_MARKET || "false",
           ),
+          // Keep the old process.env for compatibility but also expose via import.meta.env
           VITE_SUI_RPC_URL: JSON.stringify(env.VITE_SUI_RPC_URL || ""),
         },
       },

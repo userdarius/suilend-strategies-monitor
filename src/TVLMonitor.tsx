@@ -122,9 +122,9 @@ export function TVLMonitor() {
     addResult("🚀 Starting TVL calculation for all strategy wrappers...");
 
     // Temporary debug for production - remove after fixing
-    addResult(
-      `🔧 ENV CHECK: ${process.env.VITE_SUI_RPC_URL ? "LOADED" : "MISSING"}`,
-    );
+    const viteEnv = import.meta.env.VITE_SUI_RPC_URL;
+    const processEnv = process.env.VITE_SUI_RPC_URL;
+    addResult(`🔧 ENV CHECK: vite=${viteEnv ? "LOADED" : "MISSING"} process=${processEnv ? "LOADED" : "MISSING"}`);
 
     try {
       // Step 1: Find all StrategyOwnerCap objects

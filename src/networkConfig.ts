@@ -1,7 +1,8 @@
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { createNetworkConfig } from "@mysten/dapp-kit";
 
-const rpcUrl = process.env.VITE_SUI_RPC_URL;
+// Use Vite's native environment variables (import.meta.env) with fallback to process.env
+const rpcUrl = import.meta.env.VITE_SUI_RPC_URL || process.env.VITE_SUI_RPC_URL;
 // Remove quotes that JSON.stringify adds in Vite config
 const cleanedRpcUrl = rpcUrl ? rpcUrl.replace(/^"(.*)"$/, "$1") : rpcUrl;
 const mainnetUrl =
