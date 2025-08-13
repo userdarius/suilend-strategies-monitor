@@ -14,6 +14,7 @@ export default defineConfig({
         NEXT_PUBLIC_SUILEND_USE_BETA_MARKET: JSON.stringify(
           process.env.NEXT_PUBLIC_SUILEND_USE_BETA_MARKET || "false",
         ),
+        VITE_SUI_RPC_URL: JSON.stringify(process.env.VITE_SUI_RPC_URL || ""),
       },
     },
   },
