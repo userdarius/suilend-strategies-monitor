@@ -91,6 +91,7 @@ export function TVLMonitor() {
   const [result, setResult] = useState<string>("");
   const [tvlData, setTvlData] = useState<TVLSummary | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [copiedText, setCopiedText] = useState<string>("");
 
   const addResult = (message: string) => {
     setResult(
@@ -100,6 +101,18 @@ export function TVLMonitor() {
 
   const clearResults = () => {
     setResult("");
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedText(text);
+      addResult(`📋 Copied ${label}: ${text}`);
+      // Clear the copied indicator after 2 seconds
+      setTimeout(() => setCopiedText(""), 2000);
+    } catch (error) {
+      addResult(`❌ Failed to copy ${label}: ${error}`);
+    }
   };
 
   // Main function to calculate TVL from all strategy wrappers
@@ -296,34 +309,34 @@ export function TVLMonitor() {
                 `    📊 Processing ${globalIndex + 1}/${strategyCapInfos.length}: ${capInfo.obligationId.slice(0, 8)}... (attempt ${attempt})`,
               );
 
-          const obligation = await suilendClient.getObligation(
-            capInfo.obligationId,
-          );
+              const obligation = await suilendClient.getObligation(
+                capInfo.obligationId,
+              );
 
               // Extract USD values
-          const depositedUSD =
-            Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
-          const borrowedUSD =
-            Number(obligation.unweightedBorrowedValueUsd?.value || 0) /
-            10 ** 18;
-          const netValueUSD = depositedUSD - borrowedUSD;
+              const depositedUSD =
+                Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
+              const borrowedUSD =
+                Number(obligation.unweightedBorrowedValueUsd?.value || 0) /
+                10 ** 18;
+              const netValueUSD = depositedUSD - borrowedUSD;
 
               const obligationData = {
-            obligationId: capInfo.obligationId,
-            deposited_value_usd: depositedUSD,
-            unweighted_borrowed_value_usd: borrowedUSD,
-            net_value_usd: netValueUSD,
-            strategyType: capInfo.strategyType,
-            owner: capInfo.owner,
-            objectId: capInfo.objectId,
+                obligationId: capInfo.obligationId,
+                deposited_value_usd: depositedUSD,
+                unweighted_borrowed_value_usd: borrowedUSD,
+                net_value_usd: netValueUSD,
+                strategyType: capInfo.strategyType,
+                owner: capInfo.owner,
+                objectId: capInfo.objectId,
               };
 
-          addResult(
+              addResult(
                 `      ✅ Success: Deposits: $${depositedUSD.toFixed(2)} | Borrows: $${borrowedUSD.toFixed(2)}`,
-          );
+              );
 
               return obligationData;
-        } catch (error) {
+            } catch (error) {
               addResult(
                 `      ⚠️ Attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`,
               );
@@ -366,22 +379,23 @@ export function TVLMonitor() {
 
         // Enhanced failure detection and recovery
         const hasAnyFailures = batchFailures > 0;
-        const hasSignificantFailures = batchFailures > Math.ceil(batch.length * 0.2); // >20% failures
-        
+        const hasSignificantFailures =
+          batchFailures > Math.ceil(batch.length * 0.2); // >20% failures
+
         // Aggressive failure handling - immediate response to any failures
         if (hasAnyFailures) {
           lastFailureCount = batchFailures;
-          
+
           if (hasSignificantFailures || batchSuccessRate < 70) {
             // Significant failures - enter recovery mode immediately
             failureRecoveryMode = true;
             consecutiveFailures++;
             consecutiveSuccesses = 0;
-            
+
             // Aggressive rate limiting adjustments
             currentBatchSize = Math.max(currentBatchSize - 5, 3); // More aggressive reduction
             currentDelay = Math.min(currentDelay + 400, 2000); // Faster increase, max 2s
-            
+
             addResult(
               `    🚨 Aggressive slowdown: ${batchFailures} failures detected! BatchSize↓${currentBatchSize}, Delay↑${currentDelay}ms`,
             );
@@ -390,7 +404,7 @@ export function TVLMonitor() {
             currentBatchSize = Math.max(currentBatchSize - 2, 5); // Gentle reduction
             currentDelay = Math.min(currentDelay + 200, 2000); // Max 2s
 
-        addResult(
+            addResult(
               `    ⚠️ Cautious adjustment: ${batchFailures} failures, BatchSize↓${currentBatchSize}, Delay↑${currentDelay}ms`,
             );
           }
@@ -398,18 +412,20 @@ export function TVLMonitor() {
           // Perfect or near-perfect batch
           consecutiveSuccesses++;
           consecutiveFailures = 0;
-          
+
           if (failureRecoveryMode && consecutiveSuccesses >= 3) {
             // Exit recovery mode after 3 perfect batches
             failureRecoveryMode = false;
-            addResult(`    ✅ Exiting failure recovery mode after ${consecutiveSuccesses} perfect batches`);
+            addResult(
+              `    ✅ Exiting failure recovery mode after ${consecutiveSuccesses} perfect batches`,
+            );
           }
-          
+
           if (!failureRecoveryMode && consecutiveSuccesses >= 2) {
             // Speed up only when not in recovery mode
             currentBatchSize = Math.min(currentBatchSize + 3, 20); // More conservative max
             currentDelay = Math.max(currentDelay - 100, 100); // Min 100ms
-      addResult(
+            addResult(
               `    🚀 Speeding up: BatchSize↑${currentBatchSize}, Delay↓${currentDelay}ms`,
             );
           }
@@ -417,10 +433,12 @@ export function TVLMonitor() {
           // Good success rate
           consecutiveSuccesses++;
           consecutiveFailures = 0;
-          
+
           if (failureRecoveryMode) {
             // In recovery mode - be more conservative
-            addResult(`    🔄 Recovery mode: maintaining current settings despite good batch`);
+            addResult(
+              `    🔄 Recovery mode: maintaining current settings despite good batch`,
+            );
           }
         } else {
           // Moderate success rate - maintain current settings
@@ -438,14 +456,16 @@ export function TVLMonitor() {
 
         // Add delay between batches (now adaptive with failure awareness)
         if (i + currentBatchSize < strategyCapInfos.length) {
-          const delayReason = failureRecoveryMode 
-            ? "recovery mode active" 
-            : currentDelay > 500 
-              ? "rate limiting" 
+          const delayReason = failureRecoveryMode
+            ? "recovery mode active"
+            : currentDelay > 500
+              ? "rate limiting"
               : "minimal delay";
-              
+
           if (currentDelay > 400 || failureRecoveryMode) {
-            addResult(`    ⏳ Waiting ${currentDelay}ms (${delayReason}) before next batch...`);
+            addResult(
+              `    ⏳ Waiting ${currentDelay}ms (${delayReason}) before next batch...`,
+            );
           }
           await new Promise((resolve) => setTimeout(resolve, currentDelay));
         }
@@ -454,35 +474,51 @@ export function TVLMonitor() {
       // Step 4.5: Cleanup pass for failed obligations - ultra-conservative retry
       const initialSuccessCount = obligations.length;
       let initialFailedCount = strategyCapInfos.length - initialSuccessCount;
-      
+
       if (initialFailedCount > 0) {
-        addResult(`🔄 === CLEANUP PASS FOR ${initialFailedCount} FAILED OBLIGATIONS ===`);
-        addResult(`   Using ultra-conservative settings to maximize success rate...`);
-        
+        addResult(
+          `🔄 === CLEANUP PASS FOR ${initialFailedCount} FAILED OBLIGATIONS ===`,
+        );
+        addResult(
+          `   Using ultra-conservative settings to maximize success rate...`,
+        );
+
         // Find which obligations failed by comparing IDs
-        const successfulIds = new Set(obligations.map(o => o.obligationId));
-        const failedCapInfos = strategyCapInfos.filter(cap => !successfulIds.has(cap.obligationId));
-        
-        addResult(`   Retrying ${failedCapInfos.length} failed obligations with 1-by-1 processing...`);
-        
+        const successfulIds = new Set(obligations.map((o) => o.obligationId));
+        const failedCapInfos = strategyCapInfos.filter(
+          (cap) => !successfulIds.has(cap.obligationId),
+        );
+
+        addResult(
+          `   Retrying ${failedCapInfos.length} failed obligations with 1-by-1 processing...`,
+        );
+
         // Ultra-conservative settings for cleanup pass
         const cleanupDelay = 1500; // 1.5 second delay between each
         let cleanupSuccesses = 0;
-        
+
         for (let i = 0; i < failedCapInfos.length; i++) {
           const capInfo = failedCapInfos[i];
-          addResult(`   🔄 Cleanup ${i + 1}/${failedCapInfos.length}: ${capInfo.obligationId.slice(0, 8)}...`);
-          
+          addResult(
+            `   🔄 Cleanup ${i + 1}/${failedCapInfos.length}: ${capInfo.obligationId.slice(0, 8)}...`,
+          );
+
           // Even more aggressive retry logic for cleanup
           let cleanupSuccess = false;
-          for (let attempt = 1; attempt <= 5; attempt++) { // 5 attempts for cleanup
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            // 5 attempts for cleanup
             try {
               addResult(`     Attempt ${attempt}/5...`);
-              
-              const obligation = await suilendClient.getObligation(capInfo.obligationId);
-              
-              const depositedUSD = Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
-              const borrowedUSD = Number(obligation.unweightedBorrowedValueUsd?.value || 0) / 10 ** 18;
+
+              const obligation = await suilendClient.getObligation(
+                capInfo.obligationId,
+              );
+
+              const depositedUSD =
+                Number(obligation.depositedValueUsd?.value || 0) / 10 ** 18;
+              const borrowedUSD =
+                Number(obligation.unweightedBorrowedValueUsd?.value || 0) /
+                10 ** 18;
               const netValueUSD = depositedUSD - borrowedUSD;
 
               const obligationData = {
@@ -502,35 +538,46 @@ export function TVLMonitor() {
               cleanupSuccesses++;
               cleanupSuccess = true;
 
-              addResult(`     ✅ Cleanup success: $${depositedUSD.toFixed(2)} deposits, $${borrowedUSD.toFixed(2)} borrows`);
+              addResult(
+                `     ✅ Cleanup success: $${depositedUSD.toFixed(2)} deposits, $${borrowedUSD.toFixed(2)} borrows`,
+              );
               break;
-              
             } catch (error) {
-              addResult(`     ⚠️ Cleanup attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`);
-              
+              addResult(
+                `     ⚠️ Cleanup attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`,
+              );
+
               if (attempt < 5) {
                 // Exponential backoff with longer delays for cleanup
                 const backoffDelay = attempt * 2000; // 2s, 4s, 6s, 8s
                 addResult(`     ⏳ Waiting ${backoffDelay}ms before retry...`);
-                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+                await new Promise((resolve) =>
+                  setTimeout(resolve, backoffDelay),
+                );
               }
             }
           }
-          
+
           if (!cleanupSuccess) {
-            addResult(`     ❌ Cleanup failed after 5 attempts - obligation may be temporarily unavailable`);
+            addResult(
+              `     ❌ Cleanup failed after 5 attempts - obligation may be temporarily unavailable`,
+            );
           }
-          
+
           // Wait between each cleanup attempt (except for the last one)
           if (i < failedCapInfos.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, cleanupDelay));
+            await new Promise((resolve) => setTimeout(resolve, cleanupDelay));
           }
         }
-        
-        addResult(`🔄 Cleanup pass complete: ${cleanupSuccesses}/${failedCapInfos.length} additional obligations recovered`);
-        
+
+        addResult(
+          `🔄 Cleanup pass complete: ${cleanupSuccesses}/${failedCapInfos.length} additional obligations recovered`,
+        );
+
         if (cleanupSuccesses > 0) {
-          addResult(`   📈 Total success rate improved from ${((initialSuccessCount / strategyCapInfos.length) * 100).toFixed(1)}% to ${((obligations.length / strategyCapInfos.length) * 100).toFixed(1)}%`);
+          addResult(
+            `   📈 Total success rate improved from ${((initialSuccessCount / strategyCapInfos.length) * 100).toFixed(1)}% to ${((obligations.length / strategyCapInfos.length) * 100).toFixed(1)}%`,
+          );
         }
       } else {
         // No cleanup needed - set initialFailedCount to 0 for final summary
@@ -551,46 +598,52 @@ export function TVLMonitor() {
       addResult(
         `   ✅ Successful: ${successfulObligations}/${totalAttempted} (${successRate}%)`,
       );
-      const finalModeStatus = failureRecoveryMode ? " (In Recovery Mode)" : " (Normal Mode)";
+      const finalModeStatus = failureRecoveryMode
+        ? " (In Recovery Mode)"
+        : " (Normal Mode)";
       addResult(
         `   🎯 Final Batch Settings: Size=${currentBatchSize}, Delay=${currentDelay}ms${finalModeStatus}`,
       );
       addResult(
         `   📊 Adaptive Performance: ${consecutiveSuccesses} consecutive good batches`,
       );
-      
+
       if (lastFailureCount > 0) {
-          addResult(
+        addResult(
           `   🛡️ Failure Handling: Aggressive rate limiting activated (max 2s delays)`,
         );
       }
 
       if (failedObligations > 0) {
-        const failureRate = ((failedObligations / totalAttempted) * 100).toFixed(1);
+        const failureRate = (
+          (failedObligations / totalAttempted) *
+          100
+        ).toFixed(1);
         addResult(
           `   ❌ Final Failed: ${failedObligations} obligations (${failureRate}% failure rate)`,
         );
-        
+
         if (initialFailedCount > 0) {
           const recovered = initialFailedCount - failedObligations;
-            addResult(
+          addResult(
             `   🔄 Cleanup Recovery: ${recovered}/${initialFailedCount} obligations recovered in cleanup pass`,
-            );
+          );
         }
 
         if (failureRecoveryMode) {
-        addResult(
+          addResult(
             `   🔄 System is in recovery mode - using conservative settings for stability`,
-        );
+          );
         }
-        
+
         addResult(
           `   💡 Remaining failures may be due to obligations that are temporarily locked or deleted`,
         );
       } else {
-        const completionMessage = initialFailedCount > 0 
-          ? `🎉 Perfect final result! All ${totalAttempted} obligations processed (${initialFailedCount} recovered in cleanup)`
-          : `🎉 Perfect run! All ${totalAttempted} obligations processed successfully on first pass`;
+        const completionMessage =
+          initialFailedCount > 0
+            ? `🎉 Perfect final result! All ${totalAttempted} obligations processed (${initialFailedCount} recovered in cleanup)`
+            : `🎉 Perfect run! All ${totalAttempted} obligations processed successfully on first pass`;
         addResult(completionMessage);
       }
 
@@ -600,7 +653,7 @@ export function TVLMonitor() {
         totalBorrows,
         strategyCount: successfulObligations, // Use successful count
         obligations: obligations.sort(
-              (a, b) => b.deposited_value_usd - a.deposited_value_usd,
+          (a, b) => b.deposited_value_usd - a.deposited_value_usd,
         ), // Sort by deposits descending
       };
 
@@ -612,9 +665,9 @@ export function TVLMonitor() {
       addResult(`   Total TVL: ${formatUSD(totalTVL * 10 ** 18)}`);
       addResult(`   Total Deposits: ${formatUSD(totalDeposits * 10 ** 18)}`);
       addResult(`   Total Borrows: ${formatUSD(totalBorrows * 10 ** 18)}`);
-          addResult(
+      addResult(
         `   Net Value: ${formatUSD((totalDeposits - totalBorrows) * 10 ** 18)}`,
-          );
+      );
       addResult(`   Active Strategies: ${successfulObligations}`);
       addResult(`   Data Quality: ${successRate}% success rate`);
     } catch (error: any) {
@@ -1156,8 +1209,27 @@ export function TVLMonitor() {
                     {tvlData.obligations.map((obligation) => (
                       <Table.Row key={obligation.obligationId}>
                         <Table.Cell>
-                          <Text size="1" style={{ fontFamily: "monospace" }}>
-                            {obligation.obligationId.slice(0, 8)}...
+                          <Text
+                            size="1"
+                            style={{
+                              fontFamily: "monospace",
+                              cursor: "pointer",
+                              color:
+                                copiedText === obligation.obligationId
+                                  ? "#4CAF50"
+                                  : "#3b82f6",
+                              textDecoration: "underline",
+                              padding: "4px",
+                            }}
+                            onClick={() =>
+                              copyToClipboard(
+                                obligation.obligationId,
+                                "Obligation ID",
+                              )
+                            }
+                            title={`Click to copy full obligation ID: ${obligation.obligationId}`}
+                          >
+                            {obligation.obligationId.slice(0, 8)}... 📋
                           </Text>
                         </Table.Cell>
                         <Table.Cell>
@@ -1191,8 +1263,24 @@ export function TVLMonitor() {
                           </Text>
                         </Table.Cell>
                         <Table.Cell>
-                          <Text size="1" style={{ fontFamily: "monospace" }}>
-                            {obligation.owner.slice(0, 8)}...
+                          <Text
+                            size="1"
+                            style={{
+                              fontFamily: "monospace",
+                              cursor: "pointer",
+                              color:
+                                copiedText === obligation.owner
+                                  ? "#4CAF50"
+                                  : "#3b82f6",
+                              textDecoration: "underline",
+                              padding: "4px",
+                            }}
+                            onClick={() =>
+                              copyToClipboard(obligation.owner, "Owner Address")
+                            }
+                            title={`Click to copy full owner address: ${obligation.owner}`}
+                          >
+                            {obligation.owner.slice(0, 8)}... 📋
                           </Text>
                         </Table.Cell>
                       </Table.Row>
