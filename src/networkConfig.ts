@@ -1,16 +1,13 @@
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { createNetworkConfig } from "@mysten/dapp-kit";
 
-// Get custom RPC URL from environment variable, fallback to default
-const getMainnetRpcUrl = () => {
-  const customRpcUrl = process.env.VITE_SUI_RPC_URL;
-  if (customRpcUrl && customRpcUrl.trim() !== "") {
-    console.log("🔗 Using custom RPC endpoint:", customRpcUrl);
-    return customRpcUrl;
-  }
-  console.log("🔗 Using default Sui mainnet RPC endpoint");
-  return getFullnodeUrl("mainnet");
-};
+const rpcUrl = process.env.VITE_SUI_RPC_URL;
+// Remove quotes that JSON.stringify adds in Vite config
+const cleanedRpcUrl = rpcUrl ? rpcUrl.replace(/^"(.*)"$/, "$1") : rpcUrl;
+const mainnetUrl =
+  cleanedRpcUrl && cleanedRpcUrl.trim() !== "" && cleanedRpcUrl !== '""'
+    ? cleanedRpcUrl
+    : getFullnodeUrl("mainnet");
 
 const { networkConfig, useNetworkVariable, useNetworkVariables } =
   createNetworkConfig({
@@ -21,7 +18,7 @@ const { networkConfig, useNetworkVariable, useNetworkVariables } =
       url: getFullnodeUrl("testnet"),
     },
     mainnet: {
-      url: getMainnetRpcUrl(),
+      url: mainnetUrl,
     },
   });
 

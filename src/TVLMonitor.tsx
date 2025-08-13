@@ -89,6 +89,7 @@ export function TVLMonitor() {
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string>("");
+
   const [tvlData, setTvlData] = useState<TVLSummary | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [copiedText, setCopiedText] = useState<string>("");
